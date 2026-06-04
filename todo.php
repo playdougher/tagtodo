@@ -140,7 +140,6 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
             border-bottom: 1px solid #eee;
             display: flex;
             align-items: baseline;
-            cursor: pointer;
         }
         .todo-text {
             flex-grow: 1;
@@ -165,6 +164,19 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
             margin-left: 12px;
             flex-shrink: 0;
         }
+        .toggle-btn {
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+            margin-right: 10px;
+            font-size: 1.15rem;
+            color: #bbb;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+        .toggle-btn:hover { color: #4a90d9; }
+        .toggle-btn.done { color: #4a90d9; }
+        .toggle-btn.done:hover { color: #f44336; }
         .delete-link {
             margin-left: 8px;
             color: #999;
@@ -535,8 +547,8 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
 
 <div class="tips">
     选择 tag → 点添加<br>
-    单击 → 完成/恢复<br>
-    双击 → 编辑<br>
+    点击 ○ → 完成/恢复<br>
+    双击文本 → 编辑<br>
     × → 删除<br>
     点分组名 → 改名<br>
     分组名 × → 删除分组
@@ -736,6 +748,7 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
             for (const t of pending) {
                 html += `
                     <li>
+                        <span class="toggle-btn" data-idx="${t.idx}">○</span>
                         <div class="todo-text" data-idx="${t.idx}">${renderTodoContent(t)}</div>
                         <div class="timestamp">创建于 ${formatTime(t.created_at)}</div>
                         <span class="delete-link" data-idx="${t.idx}">×</span>
@@ -754,6 +767,7 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
                 const timeStr = t.done_at ? `完成于 ${formatTime(t.done_at)}` : formatTime(t.created_at);
                 html += `
                     <li>
+                        <span class="toggle-btn done" data-idx="${t.idx}">●</span>
                         <div class="todo-text done" data-idx="${t.idx}">${renderTodoContent(t)}</div>
                         <div class="timestamp">${timeStr}</div>
                         <span class="delete-link" data-idx="${t.idx}">×</span>
@@ -763,8 +777,10 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
             doneList.innerHTML = html;
         }
 
-        document.querySelectorAll('.todo-text').forEach(el => {
+        document.querySelectorAll('.toggle-btn').forEach(el => {
             el.addEventListener('click', handleToggle);
+        });
+        document.querySelectorAll('.todo-text').forEach(el => {
             el.addEventListener('dblclick', handleEdit);
         });
         document.querySelectorAll('.delete-link').forEach(el => {
@@ -799,31 +815,26 @@ function format_time($ts) { return date('Y-m-d H:i', $ts); }
         }
     }
 
-    let clickTimer = null;
-
     async function handleToggle(e) {
         e.stopPropagation();
-        if (clickTimer) clearTimeout(clickTimer);
         const el = this;
-        clickTimer = setTimeout(async () => {
-            const idx = parseInt(el.dataset.idx);
-            const oldDone = todos[idx].done;
-            const oldDoneAt = todos[idx].done_at;
-            todos[idx].done = !oldDone;
-            todos[idx].done_at = todos[idx].done ? Math.floor(Date.now() / 1000) : null;
+        const idx = parseInt(el.dataset.idx);
+        if (isNaN(idx) || !todos[idx]) return;
+        const oldDone = todos[idx].done;
+        const oldDoneAt = todos[idx].done_at;
+        todos[idx].done = !oldDone;
+        todos[idx].done_at = todos[idx].done ? Math.floor(Date.now() / 1000) : null;
+        render();
+        const ok = await sendRequest({ action: 'toggle', idx });
+        if (!ok) {
+            todos[idx].done = oldDone;
+            todos[idx].done_at = oldDoneAt;
             render();
-            const ok = await sendRequest({ action: 'toggle', idx });
-            if (!ok) {
-                todos[idx].done = oldDone;
-                todos[idx].done_at = oldDoneAt;
-                render();
-            }
-        }, 200);
+        }
     }
 
     function handleEdit(e) {
         e.stopPropagation();
-        if (clickTimer) clearTimeout(clickTimer);
         const el = this;
         const idx = parseInt(el.dataset.idx);
         const oldTags = todos[idx].tags || [];
